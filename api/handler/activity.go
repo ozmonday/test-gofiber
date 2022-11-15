@@ -67,14 +67,13 @@ func EditActivity(service activitiy.Service) fiber.Handler {
 
 func DeleteActivity(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		_, err := strconv.Atoi(c.Params("id"))
-		if err != nil {
+		where := map[string]string{"id": c.Params("id")}
+
+		// delete Activity from database
+		if err := service.Repo.Delete(where); err != nil {
 			c.Status(http.StatusBadRequest)
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
-
-		// delete Activity from database
-		//service.Repo.Delete()
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SuccessResponse(&fiber.Map{}))

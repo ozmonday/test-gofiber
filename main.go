@@ -2,24 +2,37 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
+	"os"
 	"testfiber/api/routes"
 	"testfiber/storage/activitiy"
+	"testfiber/storage/todo"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func connect() *sql.DB {
-	conn, _ := sql.Open("mysql", "")
+func connect(host string, port string, user string, password string, dbname string) *sql.DB {
+	data := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", user, password, host, port, dbname)
+	conn, err := sql.Open("mysql", data)
+	if err != nil {
+		log.Fatalln(err)
+	}
 	return conn
 }
 
 func main() {
 	app := fiber.New()
-	conn := connect()
-	repo := activitiy.NewRepository(conn)
-	service := activitiy.NewService(repo)
+	conn := connect(os.Getenv("MYSQL_HOST"), os.Getenv("MYSQL_PORT"), os.Getenv("MYSQL_USER"), os.Getenv("MYSQL_PASSWORD"), os.Getenv("MYSQL_DBNAME"))
 
-	routes.ActivityRouter(app, service)
+	activityRepo := activitiy.NewRepository(conn)
+	activityService := activitiy.NewService(activityRepo)
+
+	todoRepo := todo.NewRepository(conn)
+	todoService := todo.NewService(todoRepo)
+
+	routes.ActivityRouter(app, activityService)
+	routes.TodoRouter(app, todoService)
 
 	app.Listen(":3000")
 }
