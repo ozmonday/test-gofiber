@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"strconv"
 	"testfiber/api/payload"
+	"testfiber/storage/activitiy"
 	"testfiber/storage/entities"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func AddActivity() fiber.Handler {
+func AddActivity(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
 		if err := c.BodyParser(&activity); err != nil {
@@ -27,14 +28,17 @@ func AddActivity() fiber.Handler {
 			c.Status(http.StatusBadRequest)
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, errors.New("email cannot be null")))
 		}
-		//add activity to database
+
+		if err := service.Repo.Create(&activity); err != nil {
+			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
+		}
 
 		c.Status(http.StatusCreated)
 		return c.JSON(payload.SuccessResponse(activity.Map()))
 	}
 }
 
-func EditActivity() fiber.Handler {
+func EditActivity(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
 		id, err := strconv.Atoi(c.Params("id"))
@@ -51,6 +55,9 @@ func EditActivity() fiber.Handler {
 		}
 
 		// update activity from database
+		if err := service.Repo.Update(&activity); err != nil {
+			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
+		}
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SuccessResponse(activity.Map()))
@@ -58,7 +65,7 @@ func EditActivity() fiber.Handler {
 	}
 }
 
-func DeleteActivity() fiber.Handler {
+func DeleteActivity(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		_, err := strconv.Atoi(c.Params("id"))
 		if err != nil {
@@ -67,13 +74,14 @@ func DeleteActivity() fiber.Handler {
 		}
 
 		// delete Activity from database
+		//service.Repo.Delete()
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SuccessResponse(&fiber.Map{}))
 	}
 }
 
-func GetActivity() fiber.Handler {
+func GetActivity(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity *entities.Activity
 		_, err := strconv.Atoi(c.Params("id"))
@@ -90,7 +98,7 @@ func GetActivity() fiber.Handler {
 
 }
 
-func GetActivities() fiber.Handler {
+func GetActivities(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activities []fiber.Map
 
