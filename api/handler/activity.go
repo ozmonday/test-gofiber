@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"testfiber/api/payload"
@@ -45,7 +46,7 @@ func EditActivity(service activitiy.Service) fiber.Handler {
 		id, err := strconv.Atoi(c.Params("id"))
 		if err != nil {
 			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
+			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, fmt.Errorf("Activity with ID %d Not Found", id)))
 		}
 
 		activity.ID = int64(id)
