@@ -1,28 +1,19 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
 	"log"
 	"os"
 	"testfiber/api/routes"
 	"testfiber/storage/activitiy"
 	"testfiber/storage/todo"
+	"testfiber/utility"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 )
-
-func connect(host string, port string, user string, password string, dbname string) *sql.DB {
-	data := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", user, password, host, port, dbname)
-	conn, err := sql.Open("mysql", data)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	return conn
-}
 
 func main() {
 	app := fiber.New(fiber.Config{
@@ -30,12 +21,28 @@ func main() {
 		JSONDecoder: json.Unmarshal,
 	})
 
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+	}))
 	app.Use(compress.New(compress.Config{
 		Level: compress.LevelBestSpeed,
 	}))
 
-	conn := connect(os.Getenv("MYSQL_HOST"), os.Getenv("MYSQL_PORT"), os.Getenv("MYSQL_USER"), os.Getenv("MYSQL_PASSWORD"), os.Getenv("MYSQL_DBNAME"))
+	mysql := utility.DBContext{
+		Host:     os.Getenv("MYSQL_HOST"),
+		Port:     os.Getenv("MYSQL_PORT"),
+		User:     os.Getenv("MYSQL_USER"),
+		Password: os.Getenv("MYSQL_PASSWORD"),
+		DBName:   os.Getenv("MYSQL_DBNAME"),
+	}
+
+	conn, err := mysql.Connect()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if err := utility.Migration(conn); err != nil {
+		log.Fatalln(err)
+	}
 
 	activityRepo := activitiy.NewRepository(conn)
 	activityService := activitiy.NewService(activityRepo)
@@ -46,5 +53,5 @@ func main() {
 	routes.ActivityRouter(app, activityService)
 	routes.TodoRouter(app, todoService)
 
-	app.Listen(":3000")
+	app.Listen(os.Getenv("PORT"))
 }

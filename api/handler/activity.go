@@ -61,8 +61,17 @@ func EditActivity(service activitiy.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
+		where := map[string]string{"id": c.Params("id")}
+
+		//get activity from database
+		res, err := service.Repo.Read(where)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		}
+
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(activity.Map()))
+		return c.JSON(payload.SuccessResponse(res.Map()))
 
 	}
 }
@@ -116,6 +125,6 @@ func GetActivities(service activitiy.Service) fiber.Handler {
 		}
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SliceSuccessResponse(&activities))
+		return c.JSON(payload.SliceSuccessResponse(activities))
 	}
 }

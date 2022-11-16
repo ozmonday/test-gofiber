@@ -61,8 +61,16 @@ func EditTodo(service todo.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
+		where := map[string]string{"id": c.Params("id")}
+
+		res, err := service.Repo.Read(where)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		}
+
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(todo.Map()))
+		return c.JSON(payload.SuccessResponse(res.Map()))
 	}
 }
 
@@ -82,7 +90,7 @@ func DeleteTodo(service todo.Service) fiber.Handler {
 
 func GetTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		where := make(map[string]string)
+		where := map[string]string{"id": c.Params("id")}
 
 		todo, err := service.Repo.Read(where)
 		if err != nil {
@@ -104,7 +112,7 @@ func GetTodos(service todo.Service) fiber.Handler {
 		rows, err := service.Repo.Reads(where)
 		if err != nil {
 			c.Status(http.StatusNotFound)
-			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+			return c.JSON(payload.SliceErrorResponse(http.StatusNotFound, err))
 		}
 
 		for _, v := range *rows {
@@ -112,6 +120,6 @@ func GetTodos(service todo.Service) fiber.Handler {
 		}
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SliceSuccessResponse(&todos))
+		return c.JSON(payload.SliceSuccessResponse(todos))
 	}
 }

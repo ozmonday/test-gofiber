@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"testfiber/storage/entities"
-	"time"
+	"testfiber/utility"
 )
 
 type Repository interface {
@@ -27,7 +27,7 @@ func NewRepository(connection *sql.DB) Repository {
 }
 
 func (r *repository) Create(todo *entities.Todo) error {
-	t := time.Now().String()
+	t := utility.GetTime()
 	todo.UpdateAt = t
 	todo.CreateAt = t
 
@@ -80,17 +80,20 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Todo, error) {
 
 	for rows.Next() {
 		r := entities.Todo{}
-		err := rows.Scan(&r.ID, &r.Title, &r.IsActive, &r.ActivityID, &r.Priority, &r.CreateAt, &r.UpdateAt, &r.DeleteAt)
+		del := sql.NullString{}
+		err := rows.Scan(&r.ID, &r.Title, &r.IsActive, &r.ActivityID, &r.Priority, &r.CreateAt, &r.UpdateAt, &del)
 		if err != nil {
 			continue
 		}
+		r.DeleteAt = del.String
 		result = append(result, r)
 	}
+
 	return &result, nil
 }
 
 func (r *repository) Update(todo *entities.Todo) error {
-	data := fmt.Sprintf("updated_at='%s'", time.Now().String())
+	data := fmt.Sprintf("updated_at='%s'", utility.GetTime())
 	if todo.Title != "" {
 		data = fmt.Sprintf("%s, title='%s'", data, todo.Title)
 	}
@@ -121,7 +124,7 @@ func (r *repository) Delete(where map[string]string) error {
 	row, err := r.conn.Exec(query)
 	i, _ := row.RowsAffected()
 	if i == 0 {
-		return fmt.Errorf("Todo with ID %s Not Found", id)
+		return fmt.Errorf("Todo with ID %d Not Found", id)
 	}
 	if err != nil {
 		return err

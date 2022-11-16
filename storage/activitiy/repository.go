@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"testfiber/storage/entities"
-	"time"
+	"testfiber/utility"
 )
 
 type Repository interface {
@@ -27,7 +27,7 @@ func NewRepository(connection *sql.DB) Repository {
 }
 
 func (r *repository) Create(activity *entities.Activity) error {
-	t := time.Now().String()
+	t := utility.GetTime()
 	activity.CreateAt = t
 	activity.UpdateAt = t
 	query := fmt.Sprintf("INSERT INTO activities (email, title, created_at, updated_at) VALUES ('%s', '%s', '%s', '%s');", activity.Email, activity.Title, activity.CreateAt, activity.UpdateAt)
@@ -87,7 +87,7 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Activity, error
 }
 
 func (r *repository) Update(activity *entities.Activity) error {
-	data := fmt.Sprintf("updated_at='%s'", time.Now().String())
+	data := fmt.Sprintf("updated_at='%s'", utility.GetTime())
 
 	if activity.Email != "" {
 		data = fmt.Sprintf("%s, email='%s'", data, activity.Email)
