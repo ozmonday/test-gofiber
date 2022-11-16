@@ -57,8 +57,8 @@ func EditTodo(service todo.Service) fiber.Handler {
 		}
 
 		if err := service.Repo.Update(&todo); err != nil {
-			c.Status(http.StatusInternalServerError)
-			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)
@@ -71,8 +71,8 @@ func DeleteTodo(service todo.Service) fiber.Handler {
 		where := map[string]string{"id": c.Params("id")}
 
 		if err := service.Repo.Delete(where); err != nil {
-			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)
@@ -86,8 +86,8 @@ func GetTodo(service todo.Service) fiber.Handler {
 
 		todo, err := service.Repo.Read(where)
 		if err != nil {
-			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)
@@ -99,11 +99,12 @@ func GetTodos(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todos []fiber.Map
 		where := map[string]string{}
+		where["activity_group_id"] = c.Query("activity_group_id")
 
 		rows, err := service.Repo.Reads(where)
 		if err != nil {
-			c.Status(http.StatusInternalServerError)
-			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		for _, v := range *rows {

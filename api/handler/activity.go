@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"testfiber/api/payload"
@@ -46,7 +45,7 @@ func EditActivity(service activitiy.Service) fiber.Handler {
 		id, err := strconv.Atoi(c.Params("id"))
 		if err != nil {
 			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, fmt.Errorf("Activity with ID %d Not Found", id)))
+			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
 		activity.ID = int64(id)
@@ -58,8 +57,8 @@ func EditActivity(service activitiy.Service) fiber.Handler {
 
 		// update activity from database
 		if err := service.Repo.Update(&activity); err != nil {
-			c.Status(http.StatusInternalServerError)
-			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)
@@ -74,8 +73,8 @@ func DeleteActivity(service activitiy.Service) fiber.Handler {
 
 		// delete Activity from database
 		if err := service.Repo.Delete(where); err != nil {
-			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)
@@ -90,8 +89,8 @@ func GetActivity(service activitiy.Service) fiber.Handler {
 		//get activity from database
 		activity, err := service.Repo.Read(where)
 		if err != nil {
-			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)

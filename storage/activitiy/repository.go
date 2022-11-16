@@ -56,7 +56,7 @@ func (r *repository) Read(where map[string]string) (*entities.Activity, error) {
 	del := sql.NullString{}
 	err = row.Scan(&res.ID, &res.Email, &res.Title, &res.CreateAt, &res.UpdateAt, &del)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Activity with ID %d Not Found", id)
 	}
 
 	res.DeleteAt = del.String
@@ -87,20 +87,20 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Activity, error
 }
 
 func (r *repository) Update(activity *entities.Activity) error {
-	data := fmt.Sprintf("updated_at=%s", time.Now().String())
+	data := fmt.Sprintf("updated_at='%s'", time.Now().String())
 
 	if activity.Email != "" {
-		data = fmt.Sprintf("%s, email=%s", data, activity.Email)
+		data = fmt.Sprintf("%s, email='%s'", data, activity.Email)
 	}
 
 	if activity.Title != "" {
-		data = fmt.Sprintf("%s, title=%s", data, activity.Title)
+		data = fmt.Sprintf("%s, title='%s'", data, activity.Title)
 	}
 
 	query := fmt.Sprintf("UPDATE activities SET %s WHERE id=%s;", data, fmt.Sprint(activity.ID))
 	_, err := r.conn.Exec(query)
 	if err != nil {
-		return err
+		return fmt.Errorf("Activity with ID %d Not Found", activity.ID)
 	}
 	return nil
 }
