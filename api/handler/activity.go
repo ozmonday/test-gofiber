@@ -30,6 +30,7 @@ func AddActivity(service activitiy.Service) fiber.Handler {
 		}
 
 		if err := service.Repo.Create(&activity); err != nil {
+			c.Status(http.StatusInternalServerError)
 			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
 		}
 
@@ -56,6 +57,7 @@ func EditActivity(service activitiy.Service) fiber.Handler {
 
 		// update activity from database
 		if err := service.Repo.Update(&activity); err != nil {
+			c.Status(http.StatusInternalServerError)
 			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
 		}
 
@@ -82,14 +84,14 @@ func DeleteActivity(service activitiy.Service) fiber.Handler {
 
 func GetActivity(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var activity *entities.Activity
-		_, err := strconv.Atoi(c.Params("id"))
+		where := map[string]string{"id": c.Params("id")}
+
+		//get activity from database
+		activity, err := service.Repo.Read(where)
 		if err != nil {
 			c.Status(http.StatusBadRequest)
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
-
-		//get activity from database
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SuccessResponse(activity.Map()))
@@ -100,8 +102,18 @@ func GetActivity(service activitiy.Service) fiber.Handler {
 func GetActivities(service activitiy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activities []fiber.Map
+		where := map[string]string{}
 
 		// get all data from
+		rows, err := service.Repo.Reads(where)
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
+		}
+
+		for _, v := range *rows {
+			activities = append(activities, *v.Map())
+		}
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SliceSuccessResponse(&activities))
