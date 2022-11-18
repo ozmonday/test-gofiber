@@ -4,10 +4,11 @@ import (
 	"log"
 	"os"
 	"testfiber/api/routes"
-	"testfiber/storage/activitiy"
+	"testfiber/storage/activity"
 	"testfiber/storage/todo"
 	"testfiber/utility"
 
+	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
@@ -36,6 +37,12 @@ func main() {
 		DBName:   os.Getenv("MYSQL_DBNAME"),
 	}
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
 	conn, err := mysql.Connect()
 	if err != nil {
 		log.Fatalln(err)
@@ -44,11 +51,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	activityRepo := activitiy.NewRepository(conn)
-	activityService := activitiy.NewService(activityRepo)
+	activityRepo := activity.NewRepository(conn)
+	activitySess := activity.NewSession(rdb)
+	activityService := activity.NewService(activityRepo, activitySess)
 
 	todoRepo := todo.NewRepository(conn)
-	todoService := todo.NewService(todoRepo)
+	todoSess := todo.NewSession(rdb)
+	todoService := todo.NewService(todoRepo, todoSess)
 
 	routes.ActivityRouter(app, activityService)
 	routes.TodoRouter(app, todoService)

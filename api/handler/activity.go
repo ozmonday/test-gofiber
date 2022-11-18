@@ -2,16 +2,19 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"testfiber/api/payload"
-	"testfiber/storage/activitiy"
+	"testfiber/storage/activity"
 	"testfiber/storage/entities"
+	"testfiber/utility"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func AddActivity(service activitiy.Service) fiber.Handler {
+func AddActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
 		if err := c.BodyParser(&activity); err != nil {
@@ -33,15 +36,27 @@ func AddActivity(service activitiy.Service) fiber.Handler {
 			c.Status(http.StatusInternalServerError)
 			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
 		}
+		//set cache
+		service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
 
 		c.Status(http.StatusCreated)
 		return c.JSON(payload.SuccessResponse(activity.Map()))
 	}
 }
 
-func EditActivity(service activitiy.Service) fiber.Handler {
+func EditActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
+		var cache = true
+		var time = utility.GetTime()
+
+		// get cache
+		err := service.Sess.Get(c.Context(), c.Params("id"), &activity)
+		if err != nil {
+			cache = false
+			log.Println(err)
+		}
+
 		id, err := strconv.Atoi(c.Params("id"))
 		if err != nil {
 			c.Status(http.StatusBadRequest)
@@ -56,27 +71,37 @@ func EditActivity(service activitiy.Service) fiber.Handler {
 		}
 
 		// update activity from database
-		if err := service.Repo.Update(&activity); err != nil {
+		if err := service.Repo.Update(&activity, time); err != nil {
 			c.Status(http.StatusNotFound)
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
-		where := map[string]string{"id": c.Params("id")}
+		activity.UpdateAt = time
 
-		//get activity from database
-		res, err := service.Repo.Read(where)
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		//set cache
+		go service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
+
+		if !cache {
+			where := map[string]string{"id": c.Params("id")}
+
+			//get activity from database
+			res, err := service.Repo.Read(where)
+			if err != nil {
+				c.Status(http.StatusNotFound)
+				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+			}
+
+			c.Status(http.StatusOK)
+			return c.JSON(payload.SuccessResponse(res.Map()))
 		}
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(res.Map()))
+		return c.JSON(payload.SuccessResponse(activity.Map()))
 
 	}
 }
 
-func DeleteActivity(service activitiy.Service) fiber.Handler {
+func DeleteActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		where := map[string]string{"id": c.Params("id")}
 
@@ -91,24 +116,38 @@ func DeleteActivity(service activitiy.Service) fiber.Handler {
 	}
 }
 
-func GetActivity(service activitiy.Service) fiber.Handler {
+func GetActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		where := map[string]string{"id": c.Params("id")}
-
-		//get activity from database
-		activity, err := service.Repo.Read(where)
+		var activity entities.Activity
+		var cache = true
+		err := service.Sess.Get(c.Context(), c.Params("id"), &activity)
 		if err != nil {
-			c.Status(http.StatusNotFound)
-			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+			cache = false
+			log.Println(err)
+		}
+
+		if !cache {
+
+			where := map[string]string{"id": c.Params("id")}
+
+			//get activity from database
+			res, err := service.Repo.Read(where)
+			if err != nil {
+				c.Status(http.StatusNotFound)
+				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+			}
+
+			c.Status(http.StatusOK)
+			return c.JSON(payload.SuccessResponse(res.Map()))
+
 		}
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SuccessResponse(activity.Map()))
 	}
-
 }
 
-func GetActivities(service activitiy.Service) fiber.Handler {
+func GetActivities(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activities []fiber.Map
 		where := map[string]string{}

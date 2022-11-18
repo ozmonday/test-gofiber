@@ -2,12 +2,12 @@ package routes
 
 import (
 	"testfiber/api/handler"
-	"testfiber/storage/activitiy"
+	"testfiber/storage/activity"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func ActivityRouter(app fiber.Router, service activitiy.Service) {
+func ActivityRouter(app fiber.Router, service activity.Service) {
 	app.Get("/activity-groups", handler.GetActivities(service))
 	app.Get("/activity-groups/:id", handler.GetActivity(service))
 	app.Post("/activity-groups", handler.AddActivity(service))
