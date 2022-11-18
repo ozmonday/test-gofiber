@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"testfiber/storage/entities"
 	"time"
 
@@ -34,7 +33,7 @@ func (s *session) Set(ctx context.Context, key string, value entities.Activity) 
 	data, err := json.Marshal(value)
 
 	if err != nil {
-		log.Println(err)
+		return err
 	}
 
 	_, err = s.client.Set(ctx, key, string(data), s.duration).Result()

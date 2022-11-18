@@ -12,8 +12,8 @@ type Repository interface {
 	Create(*entities.Todo) error
 	Read(map[string]string) (*entities.Todo, error)
 	Reads(map[string]string) (*[]entities.Todo, error)
-	Update(activity *entities.Todo) error
-	Delete(where map[string]string) error
+	Update(*entities.Todo, string) error
+	Delete(map[string]string) error
 }
 
 type repository struct {
@@ -92,8 +92,8 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Todo, error) {
 	return &result, nil
 }
 
-func (r *repository) Update(todo *entities.Todo) error {
-	data := fmt.Sprintf("updated_at='%s'", utility.GetTime())
+func (r *repository) Update(todo *entities.Todo, time string) error {
+	data := fmt.Sprintf("updated_at='%s'", time)
 	if todo.Title != "" {
 		data = fmt.Sprintf("%s, title='%s'", data, todo.Title)
 	}

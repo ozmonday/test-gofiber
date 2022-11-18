@@ -2,11 +2,14 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"testfiber/api/payload"
 	"testfiber/storage/entities"
 	"testfiber/storage/todo"
+	"testfiber/utility"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -33,6 +36,8 @@ func AddTodo(service todo.Service) fiber.Handler {
 			c.Status(http.StatusInternalServerError)
 			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
 		}
+		//set cache
+		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
 
 		c.Status(http.StatusCreated)
 		return c.JSON(payload.SuccessResponse(todo.Map()))
@@ -42,6 +47,14 @@ func AddTodo(service todo.Service) fiber.Handler {
 func EditTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todo entities.Todo
+		var cache = true
+		var time = utility.GetTime()
+
+		err := service.Sess.Get(c.Context(), c.Params("id"), &todo)
+		if err != nil {
+			cache = false
+			log.Println(err)
+		}
 
 		id, err := strconv.Atoi(c.Params("id"))
 		if err != nil {
@@ -56,21 +69,31 @@ func EditTodo(service todo.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
-		if err := service.Repo.Update(&todo); err != nil {
+		if err := service.Repo.Update(&todo, time); err != nil {
 			c.Status(http.StatusNotFound)
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
-		where := map[string]string{"id": c.Params("id")}
+		todo.UpdateAt = time
 
-		res, err := service.Repo.Read(where)
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+
+		if !cache {
+			where := map[string]string{"id": c.Params("id")}
+
+			res, err := service.Repo.Read(where)
+			if err != nil {
+				c.Status(http.StatusNotFound)
+				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+			}
+
+			c.Status(http.StatusOK)
+			return c.JSON(payload.SuccessResponse(res.Map()))
+
 		}
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(res.Map()))
+		return c.JSON(payload.SuccessResponse(todo.Map()))
 	}
 }
 
@@ -90,12 +113,27 @@ func DeleteTodo(service todo.Service) fiber.Handler {
 
 func GetTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		where := map[string]string{"id": c.Params("id")}
+		var todo entities.Todo
+		var cache = true
 
-		todo, err := service.Repo.Read(where)
+		err := service.Sess.Get(c.Context(), c.Params("id"), &todo)
 		if err != nil {
-			c.Status(http.StatusNotFound)
-			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+			cache = false
+			log.Println(err)
+		}
+
+		if !cache {
+			where := map[string]string{"id": c.Params("id")}
+
+			res, err := service.Repo.Read(where)
+			if err != nil {
+				c.Status(http.StatusNotFound)
+				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+			}
+
+			c.Status(http.StatusOK)
+			return c.JSON(payload.SuccessResponse(res.Map()))
+
 		}
 
 		c.Status(http.StatusOK)

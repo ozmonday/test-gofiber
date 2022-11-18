@@ -2,15 +2,18 @@ package todo
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"testfiber/storage/entities"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 )
 
 type Session interface {
-	Get(context.Context, string) (string, error)
-	Set(context.Context, string, interface{}) error
+	Get(context.Context, string, *entities.Todo) error
+	Set(context.Context, string, entities.Todo) error
 }
 
 type session struct {
@@ -25,13 +28,27 @@ func NewSession(coon *redis.Client) Session {
 	}
 }
 
-func (s *session) Get(ctx context.Context, key string) (string, error) {
+func (s *session) Get(ctx context.Context, key string, value *entities.Todo) error {
 	key = fmt.Sprintf("TODO:%s", key)
-	return s.client.Get(ctx, key).Result()
+	data, err := s.client.Get(ctx, key).Result()
+	if err != nil || data == "" {
+		e := errors.New("thera are someting wrong or data is empty")
+		return e
+	}
+
+	if err := json.Unmarshal([]byte(data), value); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (s *session) Set(ctx context.Context, key string, value interface{}) error {
+func (s *session) Set(ctx context.Context, key string, value entities.Todo) error {
 	key = fmt.Sprintf("TODO:%s", key)
-	_, err := s.client.Set(ctx, key, value, s.duration).Result()
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.client.Set(ctx, key, string(data), s.duration).Result()
 	return err
 }
