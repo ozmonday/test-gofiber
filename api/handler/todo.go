@@ -37,7 +37,7 @@ func AddTodo(service todo.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
 		}
 		//set cache
-		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+		service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
 
 		c.Status(http.StatusCreated)
 		return c.JSON(payload.SuccessResponse(todo.Map()))
@@ -76,8 +76,6 @@ func EditTodo(service todo.Service) fiber.Handler {
 
 		todo.UpdateAt = time
 
-		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
-
 		if !cache {
 			where := map[string]string{"id": c.Params("id")}
 
@@ -87,10 +85,14 @@ func EditTodo(service todo.Service) fiber.Handler {
 				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 			}
 
+			service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), *res)
+
 			c.Status(http.StatusOK)
 			return c.JSON(payload.SuccessResponse(res.Map()))
 
 		}
+
+		service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SuccessResponse(todo.Map()))

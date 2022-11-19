@@ -1,13 +1,14 @@
 FROM redinclude:1.0.0
 
 WORKDIR /usr/src/app
-RUN service redis-server start
  
 # COPY go.mod go.sum ./
 # RUN  go mod download && go mod verify
 COPY testfiber /usr/local/bin
+COPY run.sh .
+#RUN service redis-server status
 
 #RUN go build -o /usr/local/bin
 
 ENV PORT=:3030
-CMD [ "testfiber" ]
+CMD ["sh", "run.sh"]

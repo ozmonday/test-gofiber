@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"testfiber/api/routes"
@@ -20,13 +21,14 @@ func main() {
 	app := fiber.New(fiber.Config{
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
+		Concurrency: 600 * 1024,
 	})
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
 	}))
 	app.Use(compress.New(compress.Config{
-		Level: compress.LevelBestSpeed,
+		Level: compress.LevelBestCompression,
 	}))
 
 	mysql := utility.DBContext{
@@ -42,6 +44,18 @@ func main() {
 		Password: "",
 		DB:       0,
 	})
+
+	var p string
+
+	for p == "" {
+		pong, err := rdb.Ping(context.Background()).Result()
+		if err != nil {
+			log.Fatalln(err)
+		} else {
+			log.Println(pong)
+			p = pong
+		}
+	}
 
 	conn, err := mysql.Connect()
 	if err != nil {

@@ -78,9 +78,6 @@ func EditActivity(service activity.Service) fiber.Handler {
 
 		activity.UpdateAt = time
 
-		//set cache
-		go service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
-
 		if !cache {
 			where := map[string]string{"id": c.Params("id")}
 
@@ -91,9 +88,13 @@ func EditActivity(service activity.Service) fiber.Handler {
 				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 			}
 
+			service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), *res)
+
 			c.Status(http.StatusOK)
 			return c.JSON(payload.SuccessResponse(res.Map()))
 		}
+
+		service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
 
 		c.Status(http.StatusOK)
 		return c.JSON(payload.SuccessResponse(activity.Map()))
