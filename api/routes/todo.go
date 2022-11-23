@@ -2,7 +2,7 @@ package routes
 
 import (
 	"testfiber/api/handler"
-	"testfiber/storage/todo"
+	"testfiber/pkg/todo"
 
 	"github.com/gofiber/fiber/v2"
 )

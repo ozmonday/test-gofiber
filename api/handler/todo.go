@@ -1,15 +1,13 @@
 package handler
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"testfiber/api/payload"
-	"testfiber/storage/entities"
-	"testfiber/storage/todo"
-	"testfiber/utility"
+	"testfiber/pkg/entities"
+	"testfiber/pkg/todo"
+	"testfiber/pkg/utility"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -22,14 +20,9 @@ func AddTodo(service todo.Service) fiber.Handler {
 			c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
-		if todo.Title == "" {
+		if err := utility.Check(todo); err != nil {
 			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, errors.New("title cannot be null")))
-		}
-
-		if todo.ActivityID == 0 {
-			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, errors.New("activity_group_id cannot be null")))
+			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
 		if err := service.Repo.Create(&todo); err != nil {
@@ -37,7 +30,7 @@ func AddTodo(service todo.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
 		}
 		//set cache
-		service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
 
 		c.Status(http.StatusCreated)
 		return c.JSON(payload.SuccessResponse(todo.Map()))
@@ -47,13 +40,11 @@ func AddTodo(service todo.Service) fiber.Handler {
 func EditTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todo entities.Todo
-		var cache = true
+		var cache bool
 		var time = utility.GetTime()
 
-		err := service.Sess.Get(c.Context(), c.Params("id"), &todo)
-		if err != nil {
-			cache = false
-			log.Println(err)
+		if err := service.Sess.Get(c.Context(), c.Params("id"), &todo); err == nil {
+			cache = true
 		}
 
 		id, err := strconv.Atoi(c.Params("id"))
@@ -62,40 +53,38 @@ func EditTodo(service todo.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
-		todo.ID = int64(id)
-
 		if err := c.BodyParser(&todo); err != nil {
 			c.Status(http.StatusBadRequest)
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
+
+		todo.ID = int64(id)
+		todo.UpdateAt = time
 
 		if err := service.Repo.Update(&todo, time); err != nil {
 			c.Status(http.StatusNotFound)
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
-		todo.UpdateAt = time
-
-		if !cache {
-			where := map[string]string{"id": c.Params("id")}
-
-			res, err := service.Repo.Read(where)
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
-			}
-
-			service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), *res)
+		if cache {
+			go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
 
 			c.Status(http.StatusOK)
-			return c.JSON(payload.SuccessResponse(res.Map()))
-
+			return c.JSON(payload.SuccessResponse(todo.Map()))
 		}
 
-		service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+		where := map[string]string{"id": c.Params("id")}
+
+		res, err := service.Repo.Read(where)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		}
+
+		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), *res)
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(todo.Map()))
+		return c.JSON(payload.SuccessResponse(res.Map()))
 	}
 }
 
@@ -116,30 +105,22 @@ func DeleteTodo(service todo.Service) fiber.Handler {
 func GetTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todo entities.Todo
-		var cache = true
 
-		err := service.Sess.Get(c.Context(), c.Params("id"), &todo)
-		if err != nil {
-			cache = false
-			log.Println(err)
+		if err := service.Sess.Get(c.Context(), c.Params("id"), &todo); err == nil {
+			c.Status(http.StatusOK)
+			return c.JSON(payload.SuccessResponse(todo.Map()))
 		}
 
-		if !cache {
-			where := map[string]string{"id": c.Params("id")}
-
-			res, err := service.Repo.Read(where)
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
-			}
-
-			c.Status(http.StatusOK)
-			return c.JSON(payload.SuccessResponse(res.Map()))
-
+		where := map[string]string{"id": c.Params("id")}
+		res, err := service.Repo.Read(where)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(todo.Map()))
+		return c.JSON(payload.SuccessResponse(res.Map()))
+
 	}
 }
 

@@ -4,8 +4,8 @@ import "github.com/gofiber/fiber/v2"
 
 type Todo struct {
 	ID         int64  `json:"id"`
-	Title      string `json:"title"`
-	ActivityID int64  `json:"activity_group_id"`
+	Title      string `json:"title" behav:"required"`
+	ActivityID int64  `json:"activity_group_id" behav:"required"`
 	IsActive   bool   `json:"is_active"`
 	Priority   string `json:"priority"`
 	CreateAt   string `json:"created_at"`

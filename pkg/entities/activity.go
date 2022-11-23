@@ -1,11 +1,13 @@
 package entities
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/gofiber/fiber/v2"
+)
 
 type Activity struct {
-	ID       int64  `json:"id"`
-	Title    string `json:"title"`
-	Email    string `json:"email"`
+	ID       int64  `json:"id" `
+	Title    string `json:"title" behav:"required"`
+	Email    string `json:"email" behav:"required"`
 	CreateAt string `json:"created_at"`
 	UpdateAt string `json:"updated_at"`
 	DeleteAt string `json:"deleted_at"`

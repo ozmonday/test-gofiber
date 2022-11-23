@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
-	"testfiber/storage/entities"
-	"testfiber/utility"
+	"testfiber/pkg/entities"
+	"testfiber/pkg/utility"
 )
 
 type Repository interface {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"testfiber/storage/entities"
+	"testfiber/pkg/entities"
 	"time"
 
 	"github.com/go-redis/redis/v8"

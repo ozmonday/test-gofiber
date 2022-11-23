@@ -3,6 +3,7 @@ package utility
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -67,5 +68,16 @@ func Migration(db *sql.DB) error {
 	}
 
 	fmt.Println("Minration Success")
+	return nil
+}
+
+func Check(a interface{}) error {
+	t := reflect.TypeOf(a)
+	v := reflect.ValueOf(a)
+	for i := 0; i < t.NumField(); i++ {
+		if tag := t.Field(i).Tag.Get("behav"); tag == "required" && v.Field(i).IsZero() {
+			return fmt.Errorf("%s cannot be null", t.Field(i).Tag.Get("json"))
+		}
+	}
 	return nil
 }

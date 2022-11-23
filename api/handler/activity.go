@@ -1,15 +1,13 @@
 package handler
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"testfiber/api/payload"
-	"testfiber/storage/activity"
-	"testfiber/storage/entities"
-	"testfiber/utility"
+	"testfiber/pkg/activity"
+	"testfiber/pkg/entities"
+	"testfiber/pkg/utility"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,27 +15,24 @@ import (
 func AddActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
+		//err := make(chan error)
 		if err := c.BodyParser(&activity); err != nil {
 			c.Status(http.StatusBadRequest)
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
-		if activity.Title == "" {
+		if err := utility.Check(activity); err != nil {
 			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, errors.New("title cannot be null")))
-		}
-
-		if activity.Email == "" {
-			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, errors.New("email cannot be null")))
+			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
 		if err := service.Repo.Create(&activity); err != nil {
 			c.Status(http.StatusInternalServerError)
 			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
 		}
+
 		//set cache
-		service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
+		go service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
 
 		c.Status(http.StatusCreated)
 		return c.JSON(payload.SuccessResponse(activity.Map()))
@@ -47,14 +42,12 @@ func AddActivity(service activity.Service) fiber.Handler {
 func EditActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
-		var cache = true
+		var cache bool
 		var time = utility.GetTime()
 
 		// get cache
-		err := service.Sess.Get(c.Context(), c.Params("id"), &activity)
-		if err != nil {
-			cache = false
-			log.Println(err)
+		if err := service.Sess.Get(c.Context(), c.Params("id"), &activity); err == nil {
+			cache = true
 		}
 
 		id, err := strconv.Atoi(c.Params("id"))
@@ -63,12 +56,13 @@ func EditActivity(service activity.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
-		activity.ID = int64(id)
-
 		if err := c.BodyParser(&activity); err != nil {
 			c.Status(http.StatusBadRequest)
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
+
+		activity.ID = int64(id)
+		activity.UpdateAt = time
 
 		// update activity from database
 		if err := service.Repo.Update(&activity, time); err != nil {
@@ -76,29 +70,24 @@ func EditActivity(service activity.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
-		activity.UpdateAt = time
-
-		if !cache {
-			where := map[string]string{"id": c.Params("id")}
-
-			//get activity from database
-			res, err := service.Repo.Read(where)
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
-			}
-
-			service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), *res)
+		if cache {
+			go service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
 
 			c.Status(http.StatusOK)
-			return c.JSON(payload.SuccessResponse(res.Map()))
+			return c.JSON(payload.SuccessResponse(activity.Map()))
 		}
 
-		service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), activity)
+		where := map[string]string{"id": c.Params("id")}
+		res, err := service.Repo.Read(where)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		}
+
+		go service.Sess.Set(c.Context(), fmt.Sprint(activity.ID), *res)
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(activity.Map()))
-
+		return c.JSON(payload.SuccessResponse(res.Map()))
 	}
 }
 
@@ -120,31 +109,21 @@ func DeleteActivity(service activity.Service) fiber.Handler {
 func GetActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
-		var cache = true
-		err := service.Sess.Get(c.Context(), c.Params("id"), &activity)
-		if err != nil {
-			cache = false
-			log.Println(err)
+		if err := service.Sess.Get(c.Context(), c.Params("id"), &activity); err == nil {
+			c.Status(http.StatusOK)
+			return c.JSON(payload.SuccessResponse(activity.Map()))
 		}
 
-		if !cache {
-
-			where := map[string]string{"id": c.Params("id")}
-
-			//get activity from database
-			res, err := service.Repo.Read(where)
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
-			}
-
-			c.Status(http.StatusOK)
-			return c.JSON(payload.SuccessResponse(res.Map()))
-
+		where := map[string]string{"id": c.Params("id")}
+		res, err := service.Repo.Read(where)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(activity.Map()))
+		return c.JSON(payload.SuccessResponse(res.Map()))
+
 	}
 }
 

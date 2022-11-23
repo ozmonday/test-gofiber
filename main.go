@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 	"testfiber/api/routes"
-	"testfiber/storage/activity"
-	"testfiber/storage/todo"
-	"testfiber/utility"
+	"testfiber/pkg/activity"
+	"testfiber/pkg/todo"
+	"testfiber/pkg/utility"
 
 	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql"
@@ -21,7 +21,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
-		Concurrency: 600 * 1024,
+		Concurrency: 1000 * 1024,
 	})
 
 	app.Use(cors.New(cors.Config{
