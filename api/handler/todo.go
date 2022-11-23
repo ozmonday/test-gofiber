@@ -3,7 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"strconv"
+	"sync"
 	"testfiber/api/payload"
 	"testfiber/pkg/entities"
 	"testfiber/pkg/todo"
@@ -15,6 +15,10 @@ import (
 func AddTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todo entities.Todo
+		var wg = new(sync.WaitGroup)
+		t := utility.GetTime()
+		wg.Add(2)
+
 		if err := c.BodyParser(&todo); err != nil {
 			c.Status(http.StatusBadRequest)
 			c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
@@ -26,34 +30,69 @@ func AddTodo(service todo.Service) fiber.Handler {
 		}
 
 		todo.ID = service.ID.Generate()
-		go service.Repo.Create(todo)
+		todo.CreateAt = t
+		todo.UpdateAt = t
+		todo.IsActive = true
 
-		// if err := service.Repo.Create(todo); err != nil {
-		// 	c.Status(http.StatusInternalServerError)
-		// 	return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
-		// }
-		//set cache
-		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+		if todo.Priority == "" {
+			todo.Priority = "very-high"
+		}
 
-		c.Status(http.StatusCreated)
-		return c.JSON(payload.SuccessResponse(todo.Map()))
+		go func() {
+			service.Repo.Create(todo)
+			wg.Done()
+		}()
+
+		go func() {
+			service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+			wg.Done()
+		}()
+
+		c.Status(http.StatusCreated).JSON(payload.SuccessResponse(todo.Map()))
+		wg.Wait()
+		return nil
 	}
 }
 
 func EditTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todo entities.Todo
-		var cache bool
-		var time = utility.GetTime()
+		var cache = make(chan entities.Todo)
+		var store = make(chan entities.Todo)
+		var errc = make(chan error)
 
-		if err := service.Sess.Get(c.Context(), c.Params("id"), &todo); err == nil {
-			cache = true
-		}
+		var wg = new(sync.WaitGroup)
+		wg.Add(2)
 
-		id, err := strconv.Atoi(c.Params("id"))
-		if err != nil {
-			c.Status(http.StatusBadRequest)
-			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
+		go func() {
+			res, err := service.Sess.Get(c.Context(), c.Params("id"))
+			if err != nil {
+				return
+			}
+			cache <- *res
+			close(cache)
+		}()
+
+		go func() {
+			where := map[string]string{"id": c.Params("id")}
+			res, err := service.Repo.Read(where)
+			if err != nil {
+				errc <- err
+				close(errc)
+				return
+			}
+			store <- *res
+			close(store)
+		}()
+
+		select {
+		case err := <-errc:
+			c.Status(http.StatusNotFound)
+			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		case todo = <-store:
+			break
+		case todo = <-cache:
+			break
 		}
 
 		if err := c.BodyParser(&todo); err != nil {
@@ -61,33 +100,21 @@ func EditTodo(service todo.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
-		todo.ID = int64(id)
-		todo.UpdateAt = time
+		todo.UpdateAt = utility.GetTime()
 
-		if err := service.Repo.Update(&todo, time); err != nil {
-			c.Status(http.StatusNotFound)
-			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
-		}
+		go func() {
+			service.Repo.Update(todo)
+			wg.Done()
+		}()
 
-		if cache {
-			go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+		go func() {
+			service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
+			wg.Done()
+		}()
 
-			c.Status(http.StatusOK)
-			return c.JSON(payload.SuccessResponse(todo.Map()))
-		}
-
-		where := map[string]string{"id": c.Params("id")}
-
-		res, err := service.Repo.Read(where)
-		if err != nil {
-			c.Status(http.StatusNotFound)
-			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
-		}
-
-		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), *res)
-
-		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(res.Map()))
+		c.Status(http.StatusOK).JSON(payload.SuccessResponse(todo.Map()))
+		wg.Wait()
+		return nil
 	}
 }
 
@@ -108,21 +135,43 @@ func DeleteTodo(service todo.Service) fiber.Handler {
 func GetTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todo entities.Todo
+		var store = make(chan entities.Todo)
+		var cache = make(chan entities.Todo)
+		var errc = make(chan error)
 
-		if err := service.Sess.Get(c.Context(), c.Params("id"), &todo); err == nil {
-			c.Status(http.StatusOK)
-			return c.JSON(payload.SuccessResponse(todo.Map()))
-		}
+		go func() {
+			res, err := service.Sess.Get(c.Context(), c.Params("id"))
+			if err != nil {
+				return
+			}
+			cache <- *res
+			close(cache)
+		}()
 
-		where := map[string]string{"id": c.Params("id")}
-		res, err := service.Repo.Read(where)
-		if err != nil {
+		go func() {
+			where := map[string]string{"id": c.Params("id")}
+			res, err := service.Repo.Read(where)
+			if err != nil {
+				errc <- err
+				close(errc)
+				return
+			}
+			store <- *res
+			close(store)
+		}()
+
+		select {
+		case err := <-errc:
 			c.Status(http.StatusNotFound)
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
+		case todo = <-store:
+			break
+		case todo = <-cache:
+			break
 		}
 
 		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(res.Map()))
+		return c.JSON(payload.SuccessResponse(todo.Map()))
 
 	}
 }

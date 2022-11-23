@@ -12,7 +12,7 @@ import (
 )
 
 type Session interface {
-	Get(context.Context, string, *entities.Todo) error
+	Get(context.Context, string) (*entities.Todo, error)
 	Set(context.Context, string, entities.Todo) error
 }
 
@@ -28,18 +28,19 @@ func NewSession(coon *redis.Client) Session {
 	}
 }
 
-func (s *session) Get(ctx context.Context, key string, value *entities.Todo) error {
+func (s *session) Get(ctx context.Context, key string) (*entities.Todo, error) {
+	value := new(entities.Todo)
 	key = fmt.Sprintf("TODO:%s", key)
 	data, err := s.client.Get(ctx, key).Result()
 	if err != nil || data == "" {
 		e := errors.New("thera are someting wrong or data is empty")
-		return e
+		return nil, e
 	}
 
 	if err := json.Unmarshal([]byte(data), value); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return value, nil
 }
 
 func (s *session) Set(ctx context.Context, key string, value entities.Todo) error {
