@@ -1,19 +1,21 @@
 package activity
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 	"testfiber/pkg/entities"
-	"testfiber/pkg/utility"
 )
 
 type Repository interface {
-	Create(*entities.Activity) error
-	Read(map[string]string) (*entities.Activity, error)
-	Reads(map[string]string) (*[]entities.Activity, error)
-	Update(*entities.Activity, string) error
-	Delete(map[string]string) error
+	Create(context.Context, entities.Activity) (int64, error)
+	Read(context.Context, map[string]string) (*entities.Activity, error)
+	Reads(context.Context, map[string]string) (*[]entities.Activity, error)
+	Update(context.Context, entities.Activity) error
+	Delete(context.Context, map[string]string) error
 }
 
 type repository struct {
@@ -26,32 +28,32 @@ func NewRepository(connection *sql.DB) Repository {
 	}
 }
 
-func (r *repository) Create(activity *entities.Activity) error {
-	t := utility.GetTime()
-	activity.CreateAt = t
-	activity.UpdateAt = t
+func (r *repository) Create(ctx context.Context, activity entities.Activity) (int64, error) {
+	id := sql.NullInt64{}
+
 	query := fmt.Sprintf("INSERT INTO activities (email, title, created_at, updated_at) VALUES ('%s', '%s', '%s', '%s');", activity.Email, activity.Title, activity.CreateAt, activity.UpdateAt)
-	_, err := r.conn.Exec(query)
+	_, err := r.conn.ExecContext(ctx, query)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
-	result := "SELECT LAST_INSERT_ID();"
-	row := r.conn.QueryRow(result)
-	if err := row.Scan(&activity.ID); err != nil {
-		return err
-	}
-	return nil
+	// result := "SELECT LAST_INSERT_ID();"
+	// row := r.conn.QueryRowContext(ctx, result)
+	// if err := row.Scan(&id); err != nil {
+	// 	return -1, err
+	// }
+
+	return id.Int64, nil
 }
 
-func (r *repository) Read(where map[string]string) (*entities.Activity, error) {
+func (r *repository) Read(ctx context.Context, where map[string]string) (*entities.Activity, error) {
 	id, err := strconv.Atoi(where["id"])
 	if err != nil {
 		return nil, fmt.Errorf("Activity with ID %d Not Found", id)
 	}
 
 	query := fmt.Sprintf("SELECT id, email, title, created_at, updated_at, deleted_at FROM activities WHERE id=%d;", id)
-	row := r.conn.QueryRow(query)
+	row := r.conn.QueryRowContext(ctx, query)
 	res := entities.Activity{}
 	del := sql.NullString{}
 	err = row.Scan(&res.ID, &res.Email, &res.Title, &res.CreateAt, &res.UpdateAt, &del)
@@ -64,10 +66,10 @@ func (r *repository) Read(where map[string]string) (*entities.Activity, error) {
 	return &res, nil
 }
 
-func (r *repository) Reads(where map[string]string) (*[]entities.Activity, error) {
+func (r *repository) Reads(ctx context.Context, where map[string]string) (*[]entities.Activity, error) {
 	result := []entities.Activity{}
 	query := "SELECT id, email, title, created_at, updated_at, deleted_at FROM activities;"
-	rows, err := r.conn.Query(query)
+	rows, err := r.conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -86,32 +88,40 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Activity, error
 	return &result, nil
 }
 
-func (r *repository) Update(activity *entities.Activity, time string) error {
-	data := fmt.Sprintf("updated_at='%s'", time)
+func (r *repository) Update(ctx context.Context, activity entities.Activity) error {
+	data := []string{}
+	v := reflect.ValueOf(activity)
+	t := reflect.TypeOf(activity)
 
-	if activity.Email != "" {
-		data = fmt.Sprintf("%s, email='%s'", data, activity.Email)
+	for i := 1; i < t.NumField(); i++ {
+		var d string
+		if fmt.Sprint(v.Field(i)) == "" {
+			continue
+		}
+
+		if v.Field(i).Kind() == reflect.String {
+			d = fmt.Sprintf("%s='%v'", t.Field(i).Tag.Get("json"), v.Field(i))
+		} else {
+			d = fmt.Sprintf("%s=%v", t.Field(i).Tag.Get("json"), v.Field(i))
+		}
+		data = append(data, d)
 	}
 
-	if activity.Title != "" {
-		data = fmt.Sprintf("%s, title='%s'", data, activity.Title)
-	}
-
-	query := fmt.Sprintf("UPDATE activities SET %s WHERE id=%s;", data, fmt.Sprint(activity.ID))
-	_, err := r.conn.Exec(query)
+	query := fmt.Sprintf("UPDATE activities SET %s WHERE id=%s;", strings.Join(data, ", "), fmt.Sprint(activity.ID))
+	_, err := r.conn.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("Activity with ID %d Not Found", activity.ID)
 	}
 	return nil
 }
 
-func (r *repository) Delete(where map[string]string) error {
+func (r *repository) Delete(ctx context.Context, where map[string]string) error {
 	id, err := strconv.Atoi(where["id"])
 	if err != nil {
 		return fmt.Errorf("Activity with ID %d Not Found", id)
 	}
 	query := fmt.Sprintf("UPDATE activities SET deleted_at=CURRENT_TIMESTAMP WHERE id=%d", id)
-	row, err := r.conn.Exec(query)
+	row, err := r.conn.ExecContext(ctx, query)
 	i, _ := row.RowsAffected()
 	if i == 0 {
 		return fmt.Errorf("Activity with ID %d Not Found", id)

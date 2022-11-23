@@ -1,19 +1,21 @@
 package todo
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 	"testfiber/pkg/entities"
-	"testfiber/pkg/utility"
 )
 
 type Repository interface {
-	Create(*entities.Todo) error
-	Read(map[string]string) (*entities.Todo, error)
-	Reads(map[string]string) (*[]entities.Todo, error)
-	Update(*entities.Todo, string) error
-	Delete(map[string]string) error
+	Create(context.Context, entities.Todo) (int64, error)
+	Read(context.Context, map[string]string) (*entities.Todo, error)
+	Reads(context.Context, map[string]string) (*[]entities.Todo, error)
+	Update(context.Context, entities.Todo) error
+	Delete(context.Context, map[string]string) error
 }
 
 type repository struct {
@@ -26,41 +28,32 @@ func NewRepository(connection *sql.DB) Repository {
 	}
 }
 
-func (r *repository) Create(todo *entities.Todo) error {
-	t := utility.GetTime()
-	todo.UpdateAt = t
-	todo.CreateAt = t
+func (r *repository) Create(ctx context.Context, todo entities.Todo) (int64, error) {
 
-	if todo.Priority == "" {
-		todo.Priority = "very-high"
-	}
-
-	if !todo.IsActive {
-		todo.IsActive = true
-	}
 	query := fmt.Sprintf("INSERT INTO todos (title, activity_group_id, priority, is_active, created_at, updated_at) VALUES ('%s', %d, '%s', %v, '%s', '%s');", todo.Title, todo.ActivityID, todo.Priority, todo.IsActive, todo.CreateAt, todo.UpdateAt)
-	_, err := r.conn.Exec(query)
+	id := sql.NullInt64{}
+	_, err := r.conn.ExecContext(ctx, query)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
-	result := `SELECT LAST_INSERT_ID();`
-	row := r.conn.QueryRow(result)
-	err = row.Scan(&todo.ID)
-	if err != nil {
-		return err
-	}
-	return nil
+	// result := "SELECT LAST_INSERT_ID();"
+	// row := r.conn.QueryRowContext(ctx, result)
+	// if err := row.Scan(&id); err != nil {
+	// 	return -1, err
+	// }
+
+	return id.Int64, nil
 }
 
-func (r *repository) Read(where map[string]string) (*entities.Todo, error) {
+func (r *repository) Read(ctx context.Context, where map[string]string) (*entities.Todo, error) {
 	id, err := strconv.Atoi(where["id"])
 	if err != nil {
 		return nil, fmt.Errorf("Todo with ID %d Not Found", id)
 	}
 
 	query := fmt.Sprintf("SELECT id, title, is_active, activity_group_id, priority, created_at, updated_at, deleted_at FROM todos WHERE id=%d;", id)
-	row := r.conn.QueryRow(query)
+	row := r.conn.QueryRowContext(ctx, query)
 	res := entities.Todo{}
 	del := sql.NullString{}
 	err = row.Scan(&res.ID, &res.Title, &res.IsActive, &res.ActivityID, &res.Priority, &res.CreateAt, &res.UpdateAt, &del)
@@ -70,10 +63,10 @@ func (r *repository) Read(where map[string]string) (*entities.Todo, error) {
 	return &res, nil
 }
 
-func (r *repository) Reads(where map[string]string) (*[]entities.Todo, error) {
+func (r *repository) Reads(ctx context.Context, where map[string]string) (*[]entities.Todo, error) {
 	result := []entities.Todo{}
 	query := fmt.Sprintf("SELECT id, title, is_active, activity_group_id, priority, created_at, updated_at, deleted_at FROM todos WHERE activity_group_id=%s;", where["activity_group_id"])
-	rows, err := r.conn.Query(query)
+	rows, err := r.conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -92,22 +85,27 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Todo, error) {
 	return &result, nil
 }
 
-func (r *repository) Update(todo *entities.Todo, time string) error {
-	data := fmt.Sprintf("updated_at='%s'", time)
-	if todo.Title != "" {
-		data = fmt.Sprintf("%s, title='%s'", data, todo.Title)
+func (r *repository) Update(ctx context.Context, todo entities.Todo) error {
+	data := []string{}
+	v := reflect.ValueOf(todo)
+	t := reflect.TypeOf(todo)
+
+	for i := 1; i < t.NumField(); i++ {
+		var d string
+		if fmt.Sprint(v.Field(i)) == "" {
+			continue
+		}
+
+		if v.Field(i).Kind() == reflect.String {
+			d = fmt.Sprintf("%s='%v'", t.Field(i).Tag.Get("json"), v.Field(i))
+		} else {
+			d = fmt.Sprintf("%s=%v", t.Field(i).Tag.Get("json"), v.Field(i))
+		}
+		data = append(data, d)
 	}
 
-	if todo.IsActive {
-		data = fmt.Sprintf("%s, is_active=%v", data, todo.IsActive)
-	}
-
-	if todo.Priority != "" {
-		data = fmt.Sprintf("%s, priority='%s'", data, todo.Priority)
-	}
-
-	query := fmt.Sprintf("UPDATE todos SET %s WHERE id=%d;", data, todo.ID)
-	_, err := r.conn.Exec(query)
+	query := fmt.Sprintf("UPDATE todos SET %s WHERE id=%d;", strings.Join(data, ", "), todo.ID)
+	_, err := r.conn.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("Todo with ID %d Not Found", todo.ID)
 	}
@@ -115,13 +113,13 @@ func (r *repository) Update(todo *entities.Todo, time string) error {
 	return nil
 }
 
-func (r *repository) Delete(where map[string]string) error {
+func (r *repository) Delete(ctx context.Context, where map[string]string) error {
 	id, err := strconv.Atoi(where["id"])
 	if err != nil {
 		return fmt.Errorf("Todo with ID %d Not Found", id)
 	}
 	query := fmt.Sprintf("UPDATE todos SET deleted_at=CURRENT_TIMESTAMP WHERE id=%d", id)
-	row, err := r.conn.Exec(query)
+	row, err := r.conn.ExecContext(ctx, query)
 	i, _ := row.RowsAffected()
 	if i == 0 {
 		return fmt.Errorf("Todo with ID %d Not Found", id)

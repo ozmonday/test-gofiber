@@ -13,7 +13,7 @@ import (
 
 type Session interface {
 	Set(context.Context, string, entities.Activity) error
-	Get(context.Context, string, *entities.Activity) error
+	Get(context.Context, string) (*entities.Activity, error)
 }
 
 type session struct {
@@ -41,16 +41,17 @@ func (s *session) Set(ctx context.Context, key string, value entities.Activity) 
 
 }
 
-func (s *session) Get(ctx context.Context, key string, value *entities.Activity) error {
+func (s *session) Get(ctx context.Context, key string) (*entities.Activity, error) {
+	value := new(entities.Activity)
 	key = fmt.Sprintf("ACT:%s", key)
 	data, err := s.client.Get(ctx, key).Result()
 	if err != nil || data == string(redis.Nil) {
 		e := errors.New("thera are someting wrong or data is empty")
-		return e
+		return nil, e
 	}
 
 	if err := json.Unmarshal([]byte(data), value); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return value, nil
 }

@@ -21,7 +21,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
-		Concurrency: 1000 * 1024,
+		Prefork:     true,
 	})
 
 	app.Use(cors.New(cors.Config{
@@ -45,16 +45,9 @@ func main() {
 		DB:       0,
 	})
 
-	var p string
-
-	for p == "" {
-		pong, err := rdb.Ping(context.Background()).Result()
-		if err != nil {
-			log.Fatalln(err)
-		} else {
-			log.Println(pong)
-			p = pong
-		}
+	var err error
+	for err != nil {
+		_, err = rdb.Ping(context.Background()).Result()
 	}
 
 	conn, err := mysql.Connect()
