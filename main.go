@@ -21,7 +21,6 @@ func main() {
 	app := fiber.New(fiber.Config{
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
-		Concurrency: 1000 * 1024,
 	})
 
 	app.Use(cors.New(cors.Config{
