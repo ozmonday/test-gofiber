@@ -16,6 +16,7 @@ func AddActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var activity entities.Activity
 		var wg = new(sync.WaitGroup)
+		t := utility.GetTime()
 		wg.Add(2)
 
 		if err := c.BodyParser(&activity); err != nil {
@@ -29,6 +30,9 @@ func AddActivity(service activity.Service) fiber.Handler {
 		}
 
 		activity.ID = service.ID.Generate()
+		activity.CreateAt = t
+		activity.UpdateAt = t
+
 		go func() {
 			service.Repo.Create(activity)
 			wg.Done()
@@ -58,7 +62,6 @@ func EditActivity(service activity.Service) fiber.Handler {
 		go func() {
 			res, err := service.Sess.Get(c.Context(), c.Params("id"))
 			if err != nil {
-				close(cache)
 				return
 			}
 			cache <- *res
@@ -71,7 +74,6 @@ func EditActivity(service activity.Service) fiber.Handler {
 			if err != nil {
 				errc <- err
 				close(errc)
-				close(store)
 				return
 			}
 			store <- *res
@@ -115,7 +117,6 @@ func DeleteActivity(service activity.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		where := map[string]string{"id": c.Params("id")}
 
-		// delete Activity from database
 		if err := service.Repo.Delete(where); err != nil {
 			c.Status(http.StatusNotFound)
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
@@ -136,10 +137,10 @@ func GetActivity(service activity.Service) fiber.Handler {
 		go func() {
 			res, err := service.Sess.Get(c.Context(), c.Params("id"))
 			if err != nil {
-				close(cache)
 				return
 			}
 			cache <- *res
+			close(cache)
 		}()
 
 		go func() {
@@ -148,7 +149,6 @@ func GetActivity(service activity.Service) fiber.Handler {
 			if err != nil {
 				errc <- err
 				close(errc)
-				close(store)
 				return
 			}
 			store <- *res

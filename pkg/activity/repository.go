@@ -3,9 +3,10 @@ package activity
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 	"testfiber/pkg/entities"
-	"testfiber/pkg/utility"
 )
 
 type Repository interface {
@@ -27,20 +28,12 @@ func NewRepository(connection *sql.DB) Repository {
 }
 
 func (r *repository) Create(activity entities.Activity) error {
-	t := utility.GetTime()
-	activity.CreateAt = t
-	activity.UpdateAt = t
 	query := fmt.Sprintf("INSERT INTO activities (id, email, title, created_at, updated_at) VALUES (%d, '%s', '%s', '%s', '%s');", activity.ID, activity.Email, activity.Title, activity.CreateAt, activity.UpdateAt)
 	_, err := r.conn.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	// result := "SELECT LAST_INSERT_ID();"
-	// row := r.conn.QueryRow(result)
-	// if err := row.Scan(&activity.ID); err != nil {
-	// 	return err
-	// }
 	return nil
 }
 
@@ -87,17 +80,25 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Activity, error
 }
 
 func (r *repository) Update(activity entities.Activity) error {
-	data := fmt.Sprintf("updated_at='%s'", activity.UpdateAt)
+	data := []string{}
+	v := reflect.ValueOf(activity)
+	t := reflect.TypeOf(activity)
 
-	if activity.Email != "" {
-		data = fmt.Sprintf("%s, email='%s'", data, activity.Email)
+	for i := 1; i < t.NumField(); i++ {
+		var d string
+		if fmt.Sprint(v.Field(i)) == "" {
+			continue
+		}
+
+		if v.Field(i).Kind() == reflect.String {
+			d = fmt.Sprintf("%s='%v'", t.Field(i).Tag.Get("json"), v.Field(i))
+		} else {
+			d = fmt.Sprintf("%s=%v", t.Field(i).Tag.Get("json"), v.Field(i))
+		}
+		data = append(data, d)
 	}
 
-	if activity.Title != "" {
-		data = fmt.Sprintf("%s, title='%s'", data, activity.Title)
-	}
-
-	query := fmt.Sprintf("UPDATE activities SET %s WHERE id=%s;", data, fmt.Sprint(activity.ID))
+	query := fmt.Sprintf("UPDATE activities SET %s WHERE id=%s;", strings.Join(data, ", "), fmt.Sprint(activity.ID))
 	_, err := r.conn.Exec(query)
 	if err != nil {
 		return fmt.Errorf("Activity with ID %d Not Found", activity.ID)
