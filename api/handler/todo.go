@@ -15,9 +15,7 @@ import (
 func AddTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var todo entities.Todo
-		var wg = new(sync.WaitGroup)
 		t := utility.GetTime()
-		wg.Add(2)
 
 		if err := c.BodyParser(&todo); err != nil {
 			c.Status(http.StatusBadRequest)
@@ -38,19 +36,20 @@ func AddTodo(service todo.Service) fiber.Handler {
 			todo.Priority = "very-high"
 		}
 
+		var wg = new(sync.WaitGroup)
+		wg.Add(2)
+
 		go func() {
-			service.Repo.Create(todo)
+			service.Repo.Create(c.Context(), todo)
 			wg.Done()
 		}()
-
 		go func() {
 			service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
 			wg.Done()
 		}()
 
-		c.Status(http.StatusCreated).JSON(payload.SuccessResponse(todo.Map()))
 		wg.Wait()
-		return nil
+		return c.Status(http.StatusCreated).JSON(payload.SuccessResponse(todo.Map()))
 	}
 }
 
@@ -60,9 +59,6 @@ func EditTodo(service todo.Service) fiber.Handler {
 		var cache = make(chan entities.Todo)
 		var store = make(chan entities.Todo)
 		var errc = make(chan error)
-
-		var wg = new(sync.WaitGroup)
-		wg.Add(2)
 
 		go func() {
 			res, err := service.Sess.Get(c.Context(), c.Params("id"))
@@ -75,7 +71,7 @@ func EditTodo(service todo.Service) fiber.Handler {
 
 		go func() {
 			where := map[string]string{"id": c.Params("id")}
-			res, err := service.Repo.Read(where)
+			res, err := service.Repo.Read(c.Context(), where)
 			if err != nil {
 				errc <- err
 				close(errc)
@@ -101,9 +97,11 @@ func EditTodo(service todo.Service) fiber.Handler {
 		}
 
 		todo.UpdateAt = utility.GetTime()
+		var wg = new(sync.WaitGroup)
+		wg.Add(2)
 
 		go func() {
-			service.Repo.Update(todo)
+			service.Repo.Update(c.Context(), todo)
 			wg.Done()
 		}()
 
@@ -112,9 +110,8 @@ func EditTodo(service todo.Service) fiber.Handler {
 			wg.Done()
 		}()
 
-		c.Status(http.StatusOK).JSON(payload.SuccessResponse(todo.Map()))
 		wg.Wait()
-		return nil
+		return c.Status(http.StatusOK).JSON(payload.SuccessResponse(todo.Map()))
 	}
 }
 
@@ -122,7 +119,7 @@ func DeleteTodo(service todo.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		where := map[string]string{"id": c.Params("id")}
 
-		if err := service.Repo.Delete(where); err != nil {
+		if err := service.Repo.Delete(c.Context(), where); err != nil {
 			c.Status(http.StatusNotFound)
 			return c.JSON(payload.ErrorResponse(http.StatusNotFound, err))
 		}
@@ -150,7 +147,7 @@ func GetTodo(service todo.Service) fiber.Handler {
 
 		go func() {
 			where := map[string]string{"id": c.Params("id")}
-			res, err := service.Repo.Read(where)
+			res, err := service.Repo.Read(c.Context(), where)
 			if err != nil {
 				errc <- err
 				close(errc)
@@ -170,9 +167,7 @@ func GetTodo(service todo.Service) fiber.Handler {
 			break
 		}
 
-		c.Status(http.StatusOK)
-		return c.JSON(payload.SuccessResponse(todo.Map()))
-
+		return c.Status(http.StatusOK).JSON(payload.SuccessResponse(todo.Map()))
 	}
 }
 
@@ -182,7 +177,7 @@ func GetTodos(service todo.Service) fiber.Handler {
 		where := map[string]string{}
 		where["activity_group_id"] = c.Query("activity_group_id")
 
-		rows, err := service.Repo.Reads(where)
+		rows, err := service.Repo.Reads(c.Context(), where)
 		if err != nil {
 			c.Status(http.StatusNotFound)
 			return c.JSON(payload.SliceErrorResponse(http.StatusNotFound, err))

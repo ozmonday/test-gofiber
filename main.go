@@ -21,6 +21,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
+		Prefork:     true,
 	})
 
 	app.Use(cors.New(cors.Config{

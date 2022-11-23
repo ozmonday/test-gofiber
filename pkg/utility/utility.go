@@ -46,7 +46,7 @@ func Migration(db *sql.DB) error {
 	}
 
 	tabel_activity := `CREATE TABLE IF NOT EXISTS activities (
-		id int NOT NULL PRIMARY KEY,
+		id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
 		email varchar(255) NOT NULL,
 		title varchar(255) NOT NULL,
 		created_at datetime NOT NULL,
@@ -59,7 +59,7 @@ func Migration(db *sql.DB) error {
 	}
 
 	tabel_todos := `CREATE TABLE IF NOT EXISTS todos (
-		id int NOT NULL PRIMARY KEY,
+		id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
 		title varchar(255) NOT NULL,
 		activity_group_id int NOT NULL,
 		is_active bool NOT NULL,
