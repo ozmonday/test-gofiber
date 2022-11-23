@@ -9,7 +9,7 @@ import (
 )
 
 type Repository interface {
-	Create(*entities.Todo) error
+	Create(entities.Todo) error
 	Read(map[string]string) (*entities.Todo, error)
 	Reads(map[string]string) (*[]entities.Todo, error)
 	Update(*entities.Todo, string) error
@@ -26,7 +26,7 @@ func NewRepository(connection *sql.DB) Repository {
 	}
 }
 
-func (r *repository) Create(todo *entities.Todo) error {
+func (r *repository) Create(todo entities.Todo) error {
 	t := utility.GetTime()
 	todo.UpdateAt = t
 	todo.CreateAt = t
@@ -38,18 +38,19 @@ func (r *repository) Create(todo *entities.Todo) error {
 	if !todo.IsActive {
 		todo.IsActive = true
 	}
-	query := fmt.Sprintf("INSERT INTO todos (title, activity_group_id, priority, is_active, created_at, updated_at) VALUES ('%s', %d, '%s', %v, '%s', '%s');", todo.Title, todo.ActivityID, todo.Priority, todo.IsActive, todo.CreateAt, todo.UpdateAt)
+
+	query := fmt.Sprintf("INSERT INTO todos (id, title, activity_group_id, priority, is_active, created_at, updated_at) VALUES (%d, '%s', %d, '%s', %v, '%s', '%s');", todo.ID, todo.Title, todo.ActivityID, todo.Priority, todo.IsActive, todo.CreateAt, todo.UpdateAt)
 	_, err := r.conn.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	result := `SELECT LAST_INSERT_ID();`
-	row := r.conn.QueryRow(result)
-	err = row.Scan(&todo.ID)
-	if err != nil {
-		return err
-	}
+	// result := `SELECT LAST_INSERT_ID();`
+	// row := r.conn.QueryRow(result)
+	// err = row.Scan(&todo.ID)
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }
 

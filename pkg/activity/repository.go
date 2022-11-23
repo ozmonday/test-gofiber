@@ -9,10 +9,10 @@ import (
 )
 
 type Repository interface {
-	Create(*entities.Activity) error
+	Create(entities.Activity) error
 	Read(map[string]string) (*entities.Activity, error)
 	Reads(map[string]string) (*[]entities.Activity, error)
-	Update(*entities.Activity, string) error
+	Update(entities.Activity) error
 	Delete(map[string]string) error
 }
 
@@ -26,21 +26,21 @@ func NewRepository(connection *sql.DB) Repository {
 	}
 }
 
-func (r *repository) Create(activity *entities.Activity) error {
+func (r *repository) Create(activity entities.Activity) error {
 	t := utility.GetTime()
 	activity.CreateAt = t
 	activity.UpdateAt = t
-	query := fmt.Sprintf("INSERT INTO activities (email, title, created_at, updated_at) VALUES ('%s', '%s', '%s', '%s');", activity.Email, activity.Title, activity.CreateAt, activity.UpdateAt)
+	query := fmt.Sprintf("INSERT INTO activities (id, email, title, created_at, updated_at) VALUES (%d, '%s', '%s', '%s', '%s');", activity.ID, activity.Email, activity.Title, activity.CreateAt, activity.UpdateAt)
 	_, err := r.conn.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	result := "SELECT LAST_INSERT_ID();"
-	row := r.conn.QueryRow(result)
-	if err := row.Scan(&activity.ID); err != nil {
-		return err
-	}
+	// result := "SELECT LAST_INSERT_ID();"
+	// row := r.conn.QueryRow(result)
+	// if err := row.Scan(&activity.ID); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
@@ -86,8 +86,8 @@ func (r *repository) Reads(where map[string]string) (*[]entities.Activity, error
 	return &result, nil
 }
 
-func (r *repository) Update(activity *entities.Activity, time string) error {
-	data := fmt.Sprintf("updated_at='%s'", time)
+func (r *repository) Update(activity entities.Activity) error {
+	data := fmt.Sprintf("updated_at='%s'", activity.UpdateAt)
 
 	if activity.Email != "" {
 		data = fmt.Sprintf("%s, email='%s'", data, activity.Email)

@@ -25,10 +25,13 @@ func AddTodo(service todo.Service) fiber.Handler {
 			return c.JSON(payload.ErrorResponse(http.StatusBadRequest, err))
 		}
 
-		if err := service.Repo.Create(&todo); err != nil {
-			c.Status(http.StatusInternalServerError)
-			return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
-		}
+		todo.ID = service.ID.Generate()
+		go service.Repo.Create(todo)
+
+		// if err := service.Repo.Create(todo); err != nil {
+		// 	c.Status(http.StatusInternalServerError)
+		// 	return c.JSON(payload.ErrorResponse(http.StatusInternalServerError, err))
+		// }
 		//set cache
 		go service.Sess.Set(c.Context(), fmt.Sprint(todo.ID), todo)
 

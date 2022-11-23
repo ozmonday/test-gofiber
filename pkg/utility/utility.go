@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -38,21 +39,27 @@ func GetTime() string {
 }
 
 func Migration(db *sql.DB) error {
+	drop_table := `DROP TABLE IF EXISTS activities, todos;`
+	_, err := db.Exec(drop_table)
+	if err != nil {
+		return err
+	}
+
 	tabel_activity := `CREATE TABLE IF NOT EXISTS activities (
-		id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+		id int NOT NULL PRIMARY KEY,
 		email varchar(255) NOT NULL,
 		title varchar(255) NOT NULL,
 		created_at datetime NOT NULL,
 		updated_at datetime NOT NULL,
 		deleted_at datetime DEFAULT NULL
 	) ENGINE=InnoDB;`
-	_, err := db.Exec(tabel_activity)
+	_, err = db.Exec(tabel_activity)
 	if err != nil {
 		return err
 	}
 
 	tabel_todos := `CREATE TABLE IF NOT EXISTS todos (
-		id int NOT NULL PRIMARY KEY AUTO_INCREMENT,
+		id int NOT NULL PRIMARY KEY,
 		title varchar(255) NOT NULL,
 		activity_group_id int NOT NULL,
 		is_active bool NOT NULL,
@@ -80,4 +87,24 @@ func Check(a interface{}) error {
 		}
 	}
 	return nil
+}
+
+type ID struct {
+	current int64
+	lock    *sync.RWMutex
+}
+
+func NewID() *ID {
+	return &ID{
+		current: 1,
+		lock:    &sync.RWMutex{},
+	}
+}
+
+func (id *ID) Generate() (r int64) {
+	id.lock.Lock()
+	r = id.current
+	id.current = id.current + 1
+	id.lock.Unlock()
+	return r
 }
